@@ -10,6 +10,12 @@ const char *mqttUsername = MQTT_USERNAME;
 const char *mqttPassword = MQTT_PASSWORD;
 const char *mqttTopic = MQTT_TOPIC;
 
+const int buttonPin = 2;
+const int buzzerPin = 3;
+
+unsigned long lastDebounce = 0;
+unsigned long debounceDelay = 10000;
+
 WiFiClientSecure wifiClient;
 PubSubClient client(wifiClient);
 
@@ -40,8 +46,12 @@ const char* ca_cert= \
 
 void setup()
 {
-    Serial.begin(115200);
 
+    pinMode(buttonPin, INPUT);
+    pinMode(buzzerPin, OUTPUT);
+    pinMode(LED_BUILTIN, OUTPUT);
+
+    Serial.begin(115200);
     WiFi.begin(ssid, wifiPassword);
 
     // Wait for the WiFi event
@@ -97,8 +107,53 @@ void setup()
     }
 }
 
+void reconnect() {
+  while (!client.connected()) {
+    String clientId = "esp32-client-";
+    clientId += String(WiFi.macAddress());
+    if (client.connect(clientId.c_str(), mqttUsername, mqttPassword)) {
+      Serial.println("[info] - MQTT broker connected");
+      Serial.println("[info] - Subscribing to topic - ");
+      Serial.println(mqttTopic);
+      client.subscribe(mqttTopic);
+    } else {
+      Serial.println("[error] - Unable to connect to MQTT broker");
+      Serial.println(client.state());
+      Serial.println("[info] - Retrying...");
+    }
+  }
+}
+
+void soundBuzzer() {
+  Serial.println("[info] - Sound buzzer");
+  digitalWrite(buzzerPin, HIGH);
+  delay(200);
+  digitalWrite(buzzerPin, LOW);
+  delay(200);
+  digitalWrite(buzzerPin, HIGH);
+  delay(200);
+  digitalWrite(buzzerPin, LOW);
+}
+
+void publishMessage() {
+  const int result = client.publish(MQTT_TOPIC, "{\"button\": \"true\"}");
+  Serial.print("[info] - MQTT response ");
+  Serial.print(result);
+  Serial.println("");
+  
+}
+
 void loop()
 {
-  Serial.println("In main loop");
+  if (!client.connected()) {
+    reconnect();
+  }
+
+  if (digitalRead(buttonPin) == HIGH && (millis() - lastDebounce) > debounceDelay) {
+    lastDebounce = millis();
+    soundBuzzer();
+    publishMessage();
+  }
+
   client.loop();
 }
