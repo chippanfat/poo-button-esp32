@@ -12,9 +12,12 @@ const char *mqttTopic = MQTT_TOPIC;
 
 const int buttonPin = 2;
 const int buzzerPin = 3;
+const int successLedPin = 4;
+const int connectionLedPin = 5;
+const int failedConnectionLedPin = 6;
 
 unsigned long lastDebounce = 0;
-unsigned long debounceDelay = 10000;
+const unsigned long debounceDelay = 10000;
 
 WiFiClientSecure wifiClient;
 PubSubClient client(wifiClient);
@@ -46,10 +49,14 @@ const char* ca_cert= \
 
 void setup()
 {
-
     pinMode(buttonPin, INPUT);
     pinMode(buzzerPin, OUTPUT);
-    pinMode(LED_BUILTIN, OUTPUT);
+    pinMode(successLedPin, OUTPUT);
+    pinMode(connectionLedPin, OUTPUT);
+    pinMode(failedConnectionLedPin, OUTPUT);
+
+    digitalWrite(successLedPin, LOW);
+    digitalWrite(connectionLedPin, LOW);
 
     Serial.begin(115200);
     WiFi.begin(ssid, wifiPassword);
@@ -88,12 +95,19 @@ void setup()
               clientId += String(WiFi.macAddress());
               if (client.connect(clientId.c_str(), mqttUsername, mqttPassword)) {
                 Serial.println("[info] - MQTT broker connected");
-                Serial.println("[info] - Subscribing to topic");
+                Serial.print("[info] - Subscribing to topic - ");
+                Serial.print(MQTT_TOPIC);
+                Serial.println();
                 client.subscribe(mqttTopic);
+                digitalWrite(connectionLedPin, HIGH);
+                digitalWrite(failedConnectionLedPin, LOW);
+
               } else {
                 Serial.println("[error] - Unable to connect to MQTT broker");
                 Serial.println(client.state());
                 Serial.println("[info] - Retrying...");
+                digitalWrite(failedConnectionLedPin, HIGH);
+                digitalWrite(connectionLedPin, LOW);
                 break;
               }
             }
@@ -113,13 +127,19 @@ void reconnect() {
     clientId += String(WiFi.macAddress());
     if (client.connect(clientId.c_str(), mqttUsername, mqttPassword)) {
       Serial.println("[info] - MQTT broker connected");
-      Serial.println("[info] - Subscribing to topic - ");
-      Serial.println(mqttTopic);
+      Serial.print("[info] - Subscribing to topic - ");
+      Serial.print(mqttTopic);
+      Serial.println();
       client.subscribe(mqttTopic);
+      digitalWrite(connectionLedPin, HIGH);
+      digitalWrite(failedConnectionLedPin, LOW);
     } else {
       Serial.println("[error] - Unable to connect to MQTT broker");
       Serial.println(client.state());
       Serial.println("[info] - Retrying...");
+      digitalWrite(connectionLedPin, LOW);
+      digitalWrite(failedConnectionLedPin, HIGH);
+      digitalWrite(successLedPin, LOW);
     }
   }
 }
@@ -153,6 +173,12 @@ void loop()
     lastDebounce = millis();
     soundBuzzer();
     publishMessage();
+  }
+
+  if ((millis() - lastDebounce) > debounceDelay) {
+    digitalWrite(successLedPin, HIGH);
+  } else {
+    digitalWrite(successLedPin, LOW);
   }
 
   client.loop();
